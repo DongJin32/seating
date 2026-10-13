@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>학급 자리배치</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #E7ECEF;
+    --panel: #F6F8F9;
+    --ink: #1D2830;
+    --muted: #5A6A75;
+    --line: #B7C3CB;
+    --desk: #E6CFA3;
+    --desk-edge: #C9AB77;
+    --desk-ink: #35260F;
+    --pin-bg: #CFE3D6;
+    --pin-edge: #4E8A68;
+    --teacher: #2F6B55;
+    --teacher-ink: #F2FAF6;
+    --accent: #2457C5;
+    --accent-ink: #FFFFFF;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12181D;
+      --panel: #1B232A;
+      --ink: #E6EDF1;
+      --muted: #96A6B1;
+      --line: #3A4853;
+      --desk: #7A6340;
+      --desk-edge: #9A8052;
+      --desk-ink: #FFF3DC;
+      --pin-bg: #2C5441;
+      --pin-edge: #6FBF93;
+      --teacher: #2F6B55;
+      --teacher-ink: #F2FAF6;
+      --accent: #8DB0FF;
+      --accent-ink: #0E1B38;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12181D;
+    --panel: #1B232A;
+    --ink: #E6EDF1;
+    --muted: #96A6B1;
+    --line: #3A4853;
+    --desk: #7A6340;
+    --desk-edge: #9A8052;
+    --desk-ink: #FFF3DC;
+    --pin-bg: #2C5441;
+    --pin-edge: #6FBF93;
+    --teacher: #2F6B55;
+    --teacher-ink: #F2FAF6;
+    --accent: #8DB0FF;
+    --accent-ink: #0E1B38;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 20px 16px 40px; }
+
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  h1 { margin: 0; font-family: 'Do Hyeon', 'Apple SD Gothic Neo', sans-serif; font-weight: 400; font-size: 2rem; letter-spacing: .01em; }
+  #sub { margin: 0; color: var(--muted); font-size: .95rem; }
+
+  .room {
+    display: flex; flex-direction: column; gap: 14px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px;
+  }
+  .teacher {
+    align-self: center;
+    width: min(46%, 260px);
+    text-align: center;
+    padding: 8px 0;
+    border-radius: 6px;
+    background: var(--teacher);
+    color: var(--teacher-ink);
+    font-weight: 600;
+    letter-spacing: .08em;
+    order: -1;
+  }
+  .room.flipped .teacher { order: 2; }
+
+  .board {
+    --pairgap: clamp(14px, 4vw, 36px);
+    display: grid;
+    column-gap: clamp(6px, 1.6vw, 12px);
+    row-gap: clamp(8px, 2vw, 16px);
+  }
+  .seat {
+    position: relative;
+    aspect-ratio: 5 / 4;
+    container-type: inline-size;
+    display: grid; place-items: center;
+    background: var(--desk);
+    border: 2px solid var(--desk-edge);
+    border-radius: 10px;
+    cursor: pointer;
+    user-select: none; -webkit-user-select: none;
+    touch-action: manipulation;
+    transition: transform .12s ease, outline-color .12s ease;
+  }
+  .seat .num {
+    font-family: 'Do Hyeon', 'Apple SD Gothic Neo', sans-serif;
+    font-size: 44cqw; line-height: 1;
+    color: var(--desk-ink);
+  }
+  .seat.empty { background: transparent; border: 2px dashed var(--line); }
+  .seat.pinned { background: var(--pin-bg); border-color: var(--pin-edge); }
+  .seat.sel { outline: 3px solid var(--accent); outline-offset: 2px; transform: translateY(-2px); }
+  .seat.over { outline: 3px dashed var(--accent); outline-offset: 2px; }
+  .seat:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .seat.dragging { opacity: .45; }
+  .rolling .seat:not(.pinned) .num { opacity: .75; }
+
+  .pin {
+    position: absolute; top: 3px; right: 3px;
+    width: 30px; height: 30px; padding: 0;
+    display: grid; place-items: center;
+    border: 0; border-radius: 8px;
+    background: transparent; color: var(--desk-ink);
+    opacity: .5; cursor: pointer;
+  }
+  .seat:hover .pin, .pin:focus-visible, .seat.pinned .pin { opacity: 1; }
+  .seat.pinned .pin { background: var(--pin-edge); color: #fff; }
+  .pin:focus-visible { outline: 2px solid var(--accent); }
+  .pin svg { width: 16px; height: 16px; }
+  @media (hover: none) { .pin { opacity: .8; } }
+  .seat.empty .pin { color: var(--muted); }
+  .seat.empty.pinned { background: var(--pin-bg); border-style: solid; }
+
+  #status { min-height: 1.6em; margin: 12px 2px 0; color: var(--muted); font-size: .92rem; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  button.btn {
+    font: inherit; font-weight: 600;
+    min-height: 44px; padding: 0 18px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--panel); color: var(--ink);
+    cursor: pointer;
+  }
+  button.btn:hover { border-color: var(--muted); }
+  button.btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  button.btn:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); flex: 1 1 140px; font-size: 1.1rem; }
+
+  .settings {
+    margin-top: 18px; padding: 14px 16px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    display: grid; gap: 12px;
+  }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .row label, .row .lbl { font-weight: 600; }
+  .stepper { display: inline-flex; align-items: center; gap: 4px; }
+  .stepper button {
+    width: 40px; height: 40px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+    font: inherit; font-size: 1.2rem; cursor: pointer;
+  }
+  .stepper button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .stepper output { min-width: 3.2em; text-align: center; font-weight: 600; }
+  .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
+  .switch input { width: 22px; height: 22px; accent-color: var(--accent); }
+  .hint { color: var(--muted); font-size: .85rem; font-weight: 400; }
+
+  @media (prefers-reduced-motion: reduce) { .seat { transition: none; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <h1>자리배치</h1>
+    <p id="sub"></p>
+  </header>
+
+  <section class="room" id="room" aria-label="교실 자리 배치도">
+    <div class="teacher">교탁</div>
+    <div class="board" id="board"></div>
+  </section>
+
+  <p id="status" role="status" aria-live="polite"></p>
+
+  <div class="actions">
+    <button class="btn primary" id="shuffle">섞기</button>
+    <button class="btn" id="undo">되돌리기</button>
+    <button class="btn" id="reset">번호순으로</button>
+    <button class="btn" id="copy">복사</button>
+  </div>
+
+  <section class="settings" aria-label="설정">
+    <div class="row">
+      <span class="lbl">학생 수</span>
+      <span class="stepper">
+        <button id="countMinus" aria-label="학생 수 줄이기">−</button>
+        <output id="countOut"></output>
+        <button id="countPlus" aria-label="학생 수 늘리기">+</button>
+      </span>
+    </div>
+    <div class="row">
+      <span class="lbl">한 줄 자리 수</span>
+      <span class="stepper">
+        <button id="colsMinus" aria-label="한 줄 자리 수 줄이기">−</button>
+        <output id="colsOut"></output>
+        <button id="colsPlus" aria-label="한 줄 자리 수 늘리기">+</button>
+      </span>
+    </div>
+    <div class="row">
+      <label class="switch"><input type="checkbox" id="pairGap"> 짝꿍끼리 붙이기 <span class="hint">2자리마다 간격</span></label>
+    </div>
+    <div class="row">
+      <label class="switch"><input type="checkbox" id="flip"> 교탁에서 바라본 모습 <span class="hint">180° 돌려 보기</span></label>
+    </div>
+    <p class="hint" style="margin:0">자리의 자물쇠를 누르면 그 자리는 섞어도 그대로 남아요. 번호 두 칸을 차례로 누르거나 끌어서 서로 바꿀 수 있어요.</p>
+  </section>
+</main>
+
+<script>
+(function () {
+  var KEY = 'seating-v1';
+  var S = { cols: 4, count: 11, pairGap: true, flipped: false, seats: [], pinned: [] };
+  var history = [];
+  var selected = null;
+  var dragFrom = null;
+  var busy = false;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var board = $('board'), room = $('room');
+
+  function rowsOf() { return Math.ceil(S.count / S.cols); }
+  function fresh() {
+    var n = rowsOf() * S.cols;
+    S.seats = [];
+    for (var i = 0; i < n; i++) S.seats.push(i < S.count ? i + 1 : null);
+    S.pinned = [];
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+  }
+  function load() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (!raw) return false;
+      var o = JSON.parse(raw);
+      if (!o || typeof o.cols !== 'number' || typeof o.count !== 'number' || !Array.isArray(o.seats)) return false;
+      if (o.seats.length !== Math.ceil(o.count / o.cols) * o.cols) return false;
+      S = o;
+      if (!Array.isArray(S.pinned)) S.pinned = [];
+      return true;
+    } catch (e) { return false; }
+  }
+  function setStatus(msg) { $('status').textContent = msg; }
+  function idleStatus() { setStatus('번호 두 칸을 차례로 누르거나 끌어서 자리를 바꿀 수 있어요.'); }
+
+  function snap() {
+    history.push(JSON.stringify({ seats: S.seats, pinned: S.pinned }));
+    if (history.length > 50) history.shift();
+  }
+  function undo() {
+    if (busy) return;
+    var h = history.pop();
+    if (!h) return;
+    var o = JSON.parse(h);
+    S.seats = o.seats; S.pinned = o.pinned;
+    selected = null;
+    render(); save();
+    setStatus('바로 전 배치로 되돌렸어요.');
+  }
+
+  function isPinned(i) { return S.pinned.indexOf(i) !== -1; }
+
+  function shuffleArr(a) {
+    a = a.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  function doShuffle() {
+    if (busy) return;
+    var free = [];
+    for (var i = 0; i < S.seats.length; i++) if (!isPinned(i)) free.push(i);
+    if (free.length < 2) { setStatus('섞을 수 있는 자리가 2개 이상 필요해요. 고정을 풀어 보세요.'); return; }
+    snap();
+    selected = null;
+    var vals = free.map(function (i) { return S.seats[i]; });
+    var result = vals;
+    for (var t = 0; t < 30; t++) {
+      result = shuffleArr(vals);
+      var changed = false;
+      for (var k = 0; k < vals.length; k++) if (result[k] !== vals[k]) { changed = true; break; }
+      if (changed) break;
+    }
+    busy = true;
+    var frames = 0;
+    var timer = setInterval(function () {
+      frames++;
+      if (frames >= 9) {
+        clearInterval(timer);
+        free.forEach(function (i, k) { S.seats[i] = result[k]; });
+        busy = false;
+        render(); save();
+        setStatus('새로 섞었어요. 마음에 안 들면 되돌리기를 누르세요.');
+        return;
+      }
+      var tmp = S.seats.slice();
+      var sv = shuffleArr(vals);
+      free.forEach(function (i, k) { tmp[i] = sv[k]; });
+      render(tmp, true);
+    }, 70);
+  }
+
+  function swap(a, b) {
+    snap();
+    var t = S.seats[a]; S.seats[a] = S.seats[b]; S.seats[b] = t;
+    selected = null;
+    render(); save();
+    var x = S.seats[a], y = S.seats[b];
+    if (x && y) setStatus(x + '번과 ' + y + '번의 자리를 바꿨어요.');
+    else setStatus((x || y) + '번을 빈 자리로 옮겼어요.');
+  }
+
+  function onSeat(i) {
+    if (busy) return;
+    if (selected === null) {
+      if (isPinned(i)) { setStatus('고정된 자리예요. 자물쇠를 눌러 먼저 풀어 주세요.'); return; }
+      selected = i;
+      render();
+      setStatus((S.seats[i] ? S.seats[i] + '번' : '빈 자리') + '를 골랐어요. 바꿀 자리를 누르세요.');
+    } else if (selected === i) {
+      selected = null; render(); idleStatus();
+    } else {
+      if (isPinned(i)) { setStatus('고정된 자리와는 바꿀 수 없어요.'); return; }
+      if (S.seats[selected] === null && S.seats[i] === null) { selected = null; render(); idleStatus(); return; }
+      swap(selected, i);
+    }
+  }
+
+  function togglePin(i) {
+    if (busy) return;
+    var k = S.pinned.indexOf(i);
+    if (k === -1) {
+      S.pinned.push(i);
+      if (selected === i) selected = null;
+      setStatus((S.seats[i] ? S.seats[i] + '번 자리를' : '이 빈 자리를') + ' 고정했어요.');
+    } else {
+      S.pinned.splice(k, 1);
+      setStatus('고정을 풀었어요.');
+    }
+    render(); save();
+  }
+
+  var LOCK_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/></svg>';
+  var LOCK_SHUT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+
+  function render(override, rolling) {
+    var seats = override || S.seats;
+    var cols = S.cols;
+
+    var tracks = [], trackOf = [];
+    for (var c = 0; c < cols; c++) {
+      trackOf[c] = tracks.length + 1;
+      tracks.push('minmax(0,1fr)');
+      if (S.pairGap && c % 2 === 1 && c < cols - 1) tracks.push('var(--pairgap)');
+    }
+    board.style.gridTemplateColumns = tracks.join(' ');
+    room.classList.toggle('flipped', S.flipped);
+    board.classList.toggle('rolling', !!rolling);
+    room.classList.toggle('rolling', !!rolling);
+
+    var order = [];
+    for (var i = 0; i < seats.length; i++) order.push(i);
+    if (S.flipped) order.reverse();
+
+    board.innerHTML = '';
+    order.forEach(function (idx, pos) {
+      var col = pos % cols;
+      var row = Math.floor(pos / cols);
+      var n = seats[idx];
+      var pinned = isPinned(idx);
+
+      var el = document.createElement('div');
+      el.className = 'seat' + (n === null ? ' empty' : '') + (pinned ? ' pinned' : '') + (selected === idx ? ' sel' : '');
+      el.style.gridColumn = String(trackOf[col]);
+      el.style.gridRow = String(row + 1);
+      el.tabIndex = 0;
+      el.setAttribute('role', 'button');
+      el.setAttribute('aria-pressed', selected === idx ? 'true' : 'false');
+      el.setAttribute('aria-label', (row + 1) + '줄 ' + (col + 1) + '번째 자리, ' + (n === null ? '빈 자리' : n + '번') + (pinned ? ', 고정됨' : ''));
+      el.dataset.idx = idx;
+      el.draggable = !pinned && !override;
+
+      if (n !== null) {
+        var num = document.createElement('span');
+        num.className = 'num';
+        num.textContent = n;
+        el.appendChild(num);
+      }
+
+      var pin = document.createElement('button');
+      pin.type = 'button';
+      pin.className = 'pin';
+      pin.innerHTML = pinned ? LOCK_SHUT : LOCK_OPEN;
+      pin.setAttribute('aria-label', pinned ? '자리 고정 풀기' : '이 자리 고정');
+      pin.addEventListener('click', function (e) { e.stopPropagation(); togglePin(idx); });
+      pin.addEventListener('keydown', function (e) { e.stopPropagation(); });
+      el.appendChild(pin);
+
+      el.addEventListener('click', function () { onSeat(idx); });
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSeat(idx); }
+      });
+      el.addEventListener('dragstart', function (e) {
+        if (busy || isPinned(idx)) { e.preventDefault(); return; }
+        dragFrom = idx;
+        el.classList.add('dragging');
+        try { e.dataTransfer.setData('text/plain', String(idx)); e.dataTransfer.effectAllowed = 'move'; } catch (er) {}
+      });
+      el.addEventListener('dragend', function () { dragFrom = null; el.classList.remove('dragging'); });
+      el.addEventListener('dragover', function (e) {
+        if (dragFrom === null || dragFrom === idx || isPinned(idx)) return;
+        e.preventDefault();
+        el.classList.add('over');
+      });
+      el.addEventListener('dragleave', function () { el.classList.remove('over'); });
+      el.addEventListener('drop', function (e) {
+        e.preventDefault();
+        el.classList.remove('over');
+        if (dragFrom === null || dragFrom === idx) return;
+        if (isPinned(idx)) { setStatus('고정된 자리와는 바꿀 수 없어요.'); return; }
+        if (S.seats[dragFrom] === null && S.seats[idx] === null) return;
+        var from = dragFrom; dragFrom = null;
+        swap(from, idx);
+      });
+
+      board.appendChild(el);
+    });
+
+    var rows = rowsOf();
+    var empty = S.seats.length - S.count;
+    $('sub').textContent = S.count + '명 · ' + rows + '줄 × ' + S.cols + '자리' + (empty > 0 ? ' (빈 자리 ' + empty + ')' : '');
+    $('countOut').textContent = S.count + '명';
+    $('colsOut').textContent = S.cols + '자리';
+    $('pairGap').checked = S.pairGap;
+    $('flip').checked = S.flipped;
+    $('undo').disabled = history.length === 0 || busy;
+  }
+
+  function rebuild() {
+    fresh(); history = []; selected = null;
+    render(); save();
+  }
+
+  function copyText() {
+    var cols = S.cols, lines = [];
+    var order = [];
+    for (var i = 0; i < S.seats.length; i++) order.push(i);
+    if (S.flipped) order.reverse();
+    lines.push(S.flipped ? '[교탁에서 본 모습]' : '[교탁]');
+    for (var r = 0; r < rowsOf(); r++) {
+      var parts = [];
+      for (var c = 0; c < cols; c++) {
+        var n = S.seats[order[r * cols + c]];
+        var s = n === null ? '-' : String(n);
+        while (s.length < 2) s = ' ' + s;
+        parts.push(s);
+        if (S.pairGap && c % 2 === 1 && c < cols - 1) parts.push(' ');
+      }
+      lines.push(parts.join(' '));
+    }
+    if (S.flipped) lines.push('[교탁]');
+    var text = lines.join('\n');
+    var done = function () { setStatus('배치도를 글자로 복사했어요.'); };
+    var fallback = function () {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) done(); else setStatus('복사하지 못했어요. 화면을 캡처해서 저장해 주세요.');
+      } catch (e) { setStatus('복사하지 못했어요. 화면을 캡처해서 저장해 주세요.'); }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else fallback();
+  }
+
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  $('shuffle').addEventListener('click', doShuffle);
+  $('undo').addEventListener('click', undo);
+  $('reset').addEventListener('click', function () {
+    if (busy) return;
+    snap();
+    var keepHistory = history.slice();
+    fresh();
+    history = keepHistory;
+    selected = null;
+    render(); save();
+    setStatus('번호순으로 되돌렸어요.');
+  });
+  $('copy').addEventListener('click', copyText);
+  $('countMinus').addEventListener('click', function () { if (busy) return; S.count = clamp(S.count - 1, 1, 40); rebuild(); setStatus('학생 수를 바꾸면 번호순으로 다시 놓아요.'); });
+  $('countPlus').addEventListener('click', function () { if (busy) return; S.count = clamp(S.count + 1, 1, 40); rebuild(); setStatus('학생 수를 바꾸면 번호순으로 다시 놓아요.'); });
+  $('colsMinus').addEventListener('click', function () { if (busy) return; S.cols = clamp(S.cols - 1, 2, 8); rebuild(); setStatus('줄 구성을 바꾸면 번호순으로 다시 놓아요.'); });
+  $('colsPlus').addEventListener('click', function () { if (busy) return; S.cols = clamp(S.cols + 1, 2, 8); rebuild(); setStatus('줄 구성을 바꾸면 번호순으로 다시 놓아요.'); });
+  $('pairGap').addEventListener('change', function (e) { S.pairGap = e.target.checked; render(); save(); });
+  $('flip').addEventListener('change', function (e) { S.flipped = e.target.checked; render(); save(); });
+
+  if (!load()) fresh();
+  render();
+  idleStatus();
+})();
+</script>
+</body>
+</html>
